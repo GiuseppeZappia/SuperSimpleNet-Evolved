@@ -24,7 +24,7 @@ from anomalib.utils.metrics import AUROC, AUPRO
 
 from datamodules import ksdd2, sensum
 from datamodules.ksdd2 import KSDD2, NumSegmented
-from datamodules.sensum import Sensum
+from datamodules.sensum import Sensum, RatioSegmented
 from datamodules.mvtec import MVTec
 from datamodules.visa import Visa
 
@@ -734,7 +734,7 @@ def run_sup(data_name):
         "results_save_path": Path("./results"),
     }
     if data_name == "sensum":
-        config["ratio"] = 1
+        config["ratio"] = RatioSegmented.M100.value
 
         if float(config["ratio"]) == 0:
             config["perlin_thr"] = 0.2

@@ -305,11 +305,11 @@ def get_std(df):
     return combined
 
 
-def merge_csvs(dataset, run_ids, base_path):
+def merge_csvs(dataset, run_ids, ratio, base_path):
     # read all csv and merge into one
     joined = None
     for run_id in run_ids:
-        file = base_path / str(run_id) / dataset / ("last.csv")
+        file = base_path / str(run_id) / ratio / dataset / ("last.csv")
         print(file)
         df = pd.read_csv(file)
         if joined is None:
@@ -320,8 +320,8 @@ def merge_csvs(dataset, run_ids, base_path):
     return joined
 
 
-def get_stats(dataset, run_ids, base_path):
-    joined = merge_csvs(dataset, run_ids, base_path)
+def get_stats(dataset, run_ids, ratio, base_path):
+    joined = merge_csvs(dataset, run_ids, ratio, base_path)
 
     comb_avg = get_avg(joined)
     comb_std = get_std(joined)
@@ -329,49 +329,56 @@ def get_stats(dataset, run_ids, base_path):
     return comb_avg, comb_std
 
 
-def generate_result_json(run_ids, datasets, res_path):
+def generate_result_json(run_ids, datasets, ratios, res_path):
     """
     Generate json with mean and std for all passed datasets and run_ids.
 
     Args:
         run_ids: list of run_ids
         datasets: list of datasets
+        ratios: list of ratios for each datasets
         res_path: root path of results (csvs)
 
     """
     res_json = {"avg": {}, "std": {}}
 
-    for dataset in datasets:
-        avg, std = get_stats(dataset, run_ids, res_path)
+    for dataset, ratio in zip(datasets, ratios):
+        if ratio not in res_json["avg"]:
+            res_json["avg"][ratio] = {}
+            res_json["std"][ratio] = {}
+
+        avg, std = get_stats(dataset, run_ids, ratio, res_path)
         avg = avg.drop(columns=["run_id"])
         std = std.drop(columns=["run_id"])
 
-        res_json["avg"][dataset] = avg.to_dict()
+        res_json["avg"][ratio][dataset] = avg.to_dict()
         if len(run_ids) > 1:
-            res_json["std"][dataset] = std.to_dict()
+            res_json["std"][ratio][dataset] = std.to_dict()
 
     Path("./res_json").mkdir(exist_ok=True, parents=True)
     with open("./res_json/ssn.json", "w") as f:
         json.dump(res_json, f)
 
 
-def run_eval(datasets, run_id):
+def run_eval(datasets, ratios, run_id, res_path):
     """
     Evaluate the performance for given datasets for checkpoints with run_id.
 
     Args:
         datasets: list of dataset names
+        ratios: ratio of labeled images for each dataset passed
         run_id: run_id of checkpoints to be used
+        res_path: path to where  results csv will be saved
     """
     config = {
-        "weights_path": Path(r"./weights"),
-        "datasets_folder": Path("./datasets"),
-        "results_save_path": Path("./eval_res"),
+        "weights_path": Path(r"./jim_weights"),
+        "datasets_folder": Path(r"D:\anomaly"),
+        "results_save_path": res_path,
         "image_save_path": None,  # set to save images
         "score_save_path": None,  # set to save scores
         "seed": 42,
         "batch": 8,
-        "num_workers": 8,
+        "num_workers": 0,
         "run_id": str(run_id),
         # "ratio": "1", # configured below in the loop if using extended version
         "adapt_cls_feat": False,  # (JIMS extension) cls features are not adapted
@@ -384,13 +391,8 @@ def run_eval(datasets, run_id):
         "visa": get_visa,
     }
 
-    for dataset in datasets:
-        # extended SSN (JIMS version)
-        if dataset == "ksdd2":
-            # ksdd2 has num segmented instead of ratio
-            config["ratio"] = "246"
-        else:
-            config["ratio"] = "1"
+    for dataset, ratio in zip(datasets, ratios):
+        config["ratio"] = ratio
 
         data_list = data_functions[dataset](config)
 
@@ -441,12 +443,14 @@ def run_eval(datasets, run_id):
                 / config["run_id"]
                 / dataset
                 / cat
+                / config["ratio"]
                 if config["score_save_path"]
                 else None,
                 image_save_path=config["image_save_path"]
                 / config["run_id"]
                 / dataset
                 / cat
+                / config["ratio"]
                 if config["image_save_path"]
                 else None,
             )
@@ -462,16 +466,24 @@ def run_eval(datasets, run_id):
                 last=results,
             )
             results_writer.save(
-                Path(config["results_save_path"]) / config["run_id"] / dataset
+                Path(config["results_save_path"])
+                / config["run_id"]
+                / config["ratio"]
+                / dataset
             )
 
 
 if __name__ == "__main__":
     datasets = ["mvtec", "visa", "ksdd2", "sensum"]
-    run_eval(datasets=datasets, run_id=0)
+    ratios = ["1", "1", "246", "1"]  # set ratios according to the datasets
+    # ratios = ["", "", "", ""]           # for ICPR (also set the adapt_cls_feat to True in config above!!!)
+
+    res_path = Path("./eval_res")
+    run_eval(datasets=datasets, ratios=ratios, run_id=0, res_path=res_path)
     # to get mean and std of multiple runs, specify them with run_ids
     generate_result_json(
         run_ids=["0"],
         datasets=datasets,
-        res_path=Path("./eval_res"),
+        ratios=ratios,
+        res_path=res_path,
     )
