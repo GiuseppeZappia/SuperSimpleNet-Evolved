@@ -69,7 +69,9 @@ datasets/
 
 ## Checkpoints
 
-Checkpoints are available [here](https://drive.google.com/drive/folders/1bBKL7-xFgNrzOZVnED0jBgqT5poeYf0d). We recommend that you use the latest JIMS weights and JIMS code. 
+[![Model on HF](https://huggingface.co/datasets/huggingface/badges/resolve/main/model-on-hf-sm.svg)](https://huggingface.co/papers/2508.19060)
+
+Checkpoints are available [on HuggingFace](https://huggingface.co/papers/2508.19060) and on [GDrive](https://drive.google.com/drive/folders/1bBKL7-xFgNrzOZVnED0jBgqT5poeYf0d). We recommend that you use the latest JIMS weights and JIMS code. 
 Extract checkpoints into `./weights` path and ensure they are all inside a directory with run_id 0: 
 ```
 ./weights/
