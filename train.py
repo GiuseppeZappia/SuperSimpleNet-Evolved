@@ -14,7 +14,7 @@ if LOG_WANDB:
 
 from tqdm import tqdm
 import numpy as np
-
+import argparse
 import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningDataModule, seed_everything
@@ -391,22 +391,23 @@ def main_mvtec(device, config):
     config["dataset"] = "mvtec"
     config["ratio"] = 1
 
+   # Selected a small representative subset of categories for testing
     categories = [
         "screw",
-        "pill",
-        "capsule",
+        # "pill",
+        # "capsule",
         "carpet",
-        "grid",
-        "tile",
-        "wood",
-        "zipper",
-        "cable",
-        "toothbrush",
-        "transistor",
-        "metal_nut",
+        # "grid",
+        # "tile",
+        # "wood",
+        # "zipper",
+        # "cable",
+        # "toothbrush",
+        # "transistor",
+        # "metal_nut",
         "bottle",
-        "hazelnut",
-        "leather",
+        # "hazelnut",
+        # "leather",
     ]
 
     results_writer = ResultsWriter(
@@ -659,15 +660,15 @@ def main_sensum(device, config, supervision):
             )
 
 
-def run_unsup(data_name):
+def run_unsup(data_name, backbone_name):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     config = {
         "wandb_project": "ssn",
         "datasets_folder": Path("./datasets"),
         "num_workers": 8,
-        "setup_name": "superSimpleNet",
-        "backbone": "wide_resnet50_2",
+        "setup_name": "superSimpleNet-Evolved_{backbone_name}",
+        "backbone": backbone_name,
         "layers": ["layer2", "layer3"],
         "patch_size": 3,
         "noise": True,
@@ -700,16 +701,16 @@ def run_unsup(data_name):
         main_mvtec(device=device, config=config)
 
 
-def run_sup(data_name):
+def run_sup(data_name,backbone_name):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     config = {
         "wandb_project": "ssn",
         "datasets_folder": Path("./datasets"),
         "num_workers": 1,
-        "setup_name": "superSimpleNet",
+        "setup_name": "superSimpleNet-Evolved_{backbone_name}",
         "dt": (3, 2),   # distance transform
         "dilate": 7,    # dilate mask
-        "backbone": "wide_resnet50_2",
+        "backbone": backbone_name,
         "layers": ["layer2", "layer3"],
         "patch_size": 3,
         "noise": True,
@@ -750,11 +751,18 @@ def run_sup(data_name):
             device=device, config=config, supervision=Supervision.MIXED_SUPERVISION
         )
 
-
+# Changing main implementation in order to run it by selecting the backbone 
 def main():
-    run_unsup(sys.argv[1])
-    run_sup(sys.argv[1])
+    parser = argparse.ArgumentParser(description="Train SuperSimpleNet")
+    parser.add_argument("dataset", type=str, help="Dataset name (mvtec, visa, sensum, ksdd2)")
+    parser.add_argument("--backbone", type=str, default="resnet18", help="Backbone architecture (e.g., resnet18, wide_resnet50_2)")
+    
+    args = parser.parse_args()
 
+    if args.dataset in ["mvtec", "visa"]:
+        run_unsup(args.dataset, args.backbone)
+    # if args.dataset in ["sensum", "ksdd2"]:
+    #     run_sup(args.dataset, args.backbone)
 
 if __name__ == "__main__":
     main()

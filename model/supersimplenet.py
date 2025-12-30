@@ -28,7 +28,9 @@ class SuperSimpleNet(nn.Module):
         self.image_size = image_size
         self.config = config
         self.feature_extractor = FeatureExtractor(
-            backbone=config.get("backbone", "wide_resnet50_2"),
+            #changing the backbone to "resnet18" from "wide_resnet50_2"
+            #the new size of the channels are automatically managed in feature_extractor.py
+            backbone=config.get("backbone", "resnet18"),
             layers=config.get("layers", ["layer2", "layer3"]),
             patch_size=config.get("patch_size", 3),
             image_size=image_size,
