@@ -57,8 +57,8 @@ def prepare_model(backbone_name, case):
 
 
 @torch.no_grad()
-def inference_speed(reps=1000):
-    model = prepare_model()
+def inference_speed(backbone, case, reps=1000):
+    model = prepare_model(backbone, case)
     img = prepare_image()
 
     # first - warmup
@@ -90,8 +90,8 @@ def inference_speed(reps=1000):
 
 
 @torch.no_grad()
-def throughput(reps=1000):
-    model = prepare_model()
+def throughput(backbone, case, reps=1000):
+    model = prepare_model(backbone, case)
     img = prepare_image(batched=True)
 
     # first - warmup
@@ -122,8 +122,8 @@ def throughput(reps=1000):
 
 
 @torch.no_grad()
-def memory(reps=1000):
-    model = prepare_model()
+def memory(backbone, case, reps=1000):
+    model = prepare_model(backbone, case)
     img = prepare_image()
     img = img.to("cuda")
 
@@ -170,8 +170,8 @@ def memory(reps=1000):
 
 
 @torch.no_grad()
-def flops(reps=1000):
-    model = prepare_model()
+def flops(backbone, case, reps=1000):
+    model = prepare_model(backbone, case)
     img = prepare_image()
     img = img.to("cuda")
 
