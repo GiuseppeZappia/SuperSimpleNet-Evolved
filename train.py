@@ -436,7 +436,7 @@ def main_mvtec(device, config):
         model = SuperSimpleNet(image_size=config["image_size"], config=config)
 
         datamodule = MVTec(
-            root=Path(config["datasets_folder"]) / "mvtec",
+            root=Path(config["datasets_folder"]),
             category=category,
             image_size=config["image_size"],
             train_batch_size=config["batch"],
@@ -665,7 +665,7 @@ def run_unsup(data_name, backbone_name):
 
     config = {
         "wandb_project": "ssn",
-        "datasets_folder": Path("./datasets"),
+        "datasets_folder": Path("/kaggle/input/mvtec-ad"),
         "num_workers": 8,
         "setup_name": "superSimpleNet-Evolved_{backbone_name}",
         "backbone": backbone_name,
