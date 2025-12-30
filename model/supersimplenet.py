@@ -39,7 +39,11 @@ class SuperSimpleNet(nn.Module):
         fc, fh, fw = self.feature_extractor.feature_dim
         self.fh = fh
         self.fw = fw
-        self.feature_adaptor = FeatureAdaptor(projection_dim=fc)
+
+        # Getting config param to choose Case (A or B)
+        non_linear_adaptor = config.get("non_linear_adaptor", False)
+        # giving to FeatureAdaptor the choice of Case
+        self.feature_adaptor = FeatureAdaptor(projection_dim=fc, non_linear=non_linear_adaptor)
         self.adapt_cls_feat = config.get("adapt_cls_feat", False)
 
         self.discriminator = Discriminator(
@@ -167,16 +171,29 @@ def init_weights(m: nn.Module):
         nn.init.constant_(m.weight, 1)
 
 
-class FeatureAdaptor(nn.Module):
-    def __init__(self, projection_dim: int):
+class FeatureAdaptor(nn.Module):    
+    def __init__(self, projection_dim: int, non_linear: bool = False):
         super().__init__()
-        # linear layer equivalent
-        self.projection = nn.Conv2d(
-            in_channels=projection_dim,
-            out_channels=projection_dim,
-            kernel_size=1,
-            stride=1,
-        )
+        if non_linear:
+            # Case B: 3x3 Convolution + BatchNorm + ReLU
+            self.projection = nn.Sequential(
+                nn.Conv2d(
+                    in_channels=projection_dim,
+                    out_channels=projection_dim,
+                    kernel_size=3,
+                    padding=1, # keeping spatial dimensions
+                ),
+                nn.BatchNorm2d(projection_dim),
+                nn.ReLU(inplace=True)
+            )
+        else:
+            # Case A / Original: 1x1 Convolution (Linear)
+            self.projection = nn.Conv2d(
+                in_channels=projection_dim,
+                out_channels=projection_dim,
+                kernel_size=1,
+                stride=1,
+            )
         self.apply(init_weights)
 
     def forward(self, features: Tensor) -> Tensor:

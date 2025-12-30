@@ -659,16 +659,17 @@ def main_sensum(device, config, supervision):
                 / str(config["ratio"])
             )
 
-
-def run_unsup(data_name, backbone_name):
+# backbone and case selection added to unsupervised run function
+def run_unsup(data_name, backbone_name, case):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     config = {
         "wandb_project": "ssn",
-        "datasets_folder": Path("/kaggle/input/mvtec-ad"),
+        "datasets_folder": Path("/kaggle/input/mvtec-ad"), # changed the path in order to use mvtec dataset from kaggle input
         "num_workers": 8,
-        "setup_name": "superSimpleNet-Evolved_{backbone_name}",
+        "setup_name": f"superSimpleNet-Evolved_{backbone_name}_case_{case}", # to distinghuish the runs with different backbones and case
         "backbone": backbone_name,
+        "non_linear_adaptor": (case == "B"),
         "layers": ["layer2", "layer3"],
         "patch_size": 3,
         "noise": True,
@@ -755,12 +756,14 @@ def run_sup(data_name,backbone_name):
 def main():
     parser = argparse.ArgumentParser(description="Train SuperSimpleNet")
     parser.add_argument("dataset", type=str, help="Dataset name (mvtec, visa, sensum, ksdd2)")
-    parser.add_argument("--backbone", type=str, default="resnet18", help="Backbone architecture (e.g., resnet18, wide_resnet50_2)")
     
+    parser.add_argument("--backbone", type=str, default="resnet18", help="Backbone architecture")
+    parser.add_argument("--case", type=str, default="A", choices=["A", "B"], help="Case A (linear) or B (non-linear)")
+
     args = parser.parse_args()
 
     if args.dataset in ["mvtec", "visa"]:
-        run_unsup(args.dataset, args.backbone)
+        run_unsup(args.dataset, args.backbone, args.case)
     # if args.dataset in ["sensum", "ksdd2"]:
     #     run_sup(args.dataset, args.backbone)
 
