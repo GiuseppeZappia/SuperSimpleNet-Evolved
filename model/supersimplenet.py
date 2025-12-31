@@ -153,7 +153,7 @@ class SuperSimpleNet(nn.Module):
             gamma=self.config["gamma"],
         )
 
-        return optim, sched
+        return optim, optim_gen, sched
 
     def save_model(self, path: Path):
         path.mkdir(exist_ok=True, parents=True)
