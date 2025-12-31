@@ -99,16 +99,18 @@ def train(
                 
                 loss.backward(retain_graph=True) # Retain graph for second step
                 
-                # Update Discriminator and Adaptor
-                if clip_grad:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
-                optimizer.step()
 
                 # Update Generator: we use the negative loss to "win" if the discriminator is wrong
                 # Note: we optimize only the parameters of model.noise_generator
                 optimizer_gen.zero_grad()
                 loss_gen = -loss 
                 loss_gen.backward()
+
+                                # Update Discriminator and Adaptor
+                if clip_grad:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+                optimizer.step()
+
                 optimizer_gen.step()
 
                 total_loss += loss.detach().cpu().item()
