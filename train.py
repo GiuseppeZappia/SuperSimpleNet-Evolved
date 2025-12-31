@@ -47,133 +47,80 @@ def train(
     eval_step_size: int = 4,
 ):
     model.to(device)
-    optimizer, scheduler = model.get_optimizers()
+    # Riceviamo entrambi gli ottimizzatori
+    optimizer, optimizer_gen, scheduler = model.get_optimizers()
 
     model.train()
     train_loader = datamodule.train_dataloader()
     for epoch in range(epochs):
         model.train()
         total_loss = 0
-        with tqdm(
-            total=len(train_loader),
-            desc=str(epoch) + "/" + str(epochs),
-            miniters=int(1),
-            unit="batch",
-        ) as prog_bar:
+        with tqdm(total=len(train_loader), desc=str(epoch) + "/" + str(epochs), unit="batch") as prog_bar:
             for i, batch in enumerate(train_loader):
+                # Gradient reset
                 optimizer.zero_grad()
+                optimizer_gen.zero_grad()
 
                 image_batch = batch["image"].to(device)
-
-                # best downsampling proposed by DestSeg
                 mask = batch["mask"].type(torch.float32).to(device)
-                mask = F.interpolate(
-                    mask.unsqueeze(1),
-                    size=(model.fh, model.fw),
-                    mode="bilinear",
-                    align_corners=True,
-                )
-                mask = torch.where(
-                    mask < 0.5, torch.zeros_like(mask), torch.ones_like(mask)
-                )
+                mask = F.interpolate(mask.unsqueeze(1), size=(model.fh, model.fw), mode="bilinear", align_corners=True)
+                mask = torch.where(mask < 0.5, torch.zeros_like(mask), torch.ones_like(mask))
 
                 label = batch["label"].to(device).type(torch.float32)
                 is_segmented = batch["is_segmented"].to(device).type(torch.float32)
 
-                anomaly_map, score, mask, label = model.forward(
-                    image_batch, mask, label
-                )
+                # Forward (it includes the generation of the learned noise)
+                anomaly_map, score, mask, label = model.forward(image_batch, mask, label)
 
+                # Computing Loss standard (Segmentation + Classification)
                 seg_focal = focal_loss(torch.sigmoid(anomaly_map), mask, reduction=None)
-
-                # use this shape to apply weights from distance transform if enabled
                 seg_l1 = torch.zeros_like(anomaly_map)
-
-                # adjusted truncated l1: mask + flipped sign (ano->pos, good->neg)
-                normal_scores = anomaly_map[mask == 0]
-                seg_l1[mask == 0] = torch.clip(normal_scores + th, min=0)
-
-                anomalous_scores = anomaly_map[mask > 0]
-                seg_l1[mask > 0] = torch.clip(-anomalous_scores + th, min=0)
+                seg_l1[mask == 0] = torch.clip(anomaly_map[mask == 0] + th, min=0)
+                seg_l1[mask > 0] = torch.clip(-anomaly_map[mask > 0] + th, min=0)
 
                 if "loss_mask" in batch:
-                    loss_mask = batch["loss_mask"].type(torch.float32).to(device)
-
-                    # resize loss_mask to fit the loss
-                    loss_mask = F.interpolate(
-                        loss_mask.unsqueeze(1),
-                        size=seg_focal.shape[-2:],
-                        mode="bilinear",
-                        align_corners=True,
-                    )
-
-                    # due to feat. duplication stack mask and multiply to get weighted loss
+                    loss_mask = F.interpolate(batch["loss_mask"].unsqueeze(1).type(torch.float32).to(device), 
+                                             size=seg_focal.shape[-2:], mode="bilinear", align_corners=True)
                     loss_mask = torch.cat((loss_mask, loss_mask))
                     seg_focal *= loss_mask
                     seg_l1 *= loss_mask
 
-                # due to feat. duplication
-                is_segmented = torch.cat((is_segmented, is_segmented)).type(torch.bool)
+                is_segmented_bool = torch.cat((is_segmented, is_segmented)).type(torch.bool)
+                bad_loss = seg_l1[is_segmented_bool][mask[is_segmented_bool] > 0].mean() if (mask[is_segmented_bool] > 0).any() else 0
+                good_loss = seg_l1[is_segmented_bool][mask[is_segmented_bool] == 0].mean() if (mask[is_segmented_bool] == 0).any() else 0
+                focal_val = seg_focal[is_segmented_bool].mean() if is_segmented_bool.any() else 0
 
-                bad_loss = seg_l1[is_segmented][mask[is_segmented] > 0]
-                good_loss = seg_l1[is_segmented][mask[is_segmented] == 0]
-                focal_val = seg_focal[is_segmented]
-
-                if len(good_loss):
-                    good_loss = good_loss.mean()
-                else:
-                    good_loss = 0
-                if len(bad_loss):
-                    bad_loss = bad_loss.mean()
-                else:
-                    bad_loss = 0
-                if len(focal_val):
-                    focal_val = focal_val.mean()
-                else:
-                    focal_val = 0
-
-                # seg loss is combination of trunc l1 and focal (separately avg each l1 part due to unbalanced pixels)
                 seg_loss = good_loss + bad_loss + focal_val
-
                 loss = seg_loss + focal_loss(torch.sigmoid(score), label)
 
-                loss.backward()
-
+                # --- ADVERSARIAL STEP  ---
+                # The discriminator minimizes the loss
+                # The generator maximizes the loss (negative sign)
+                
+                loss.backward(retain_graph=True) # Retain graph for second step
+                
+                # Update Discriminator and Adaptor
                 if clip_grad:
-                    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
-                else:
-                    norm = None
-
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
                 optimizer.step()
 
+                # Update Generator: we use the negative loss to "win" if the discriminator is wrong
+                # Note: we optimize only the parameters of model.noise_generator
+                optimizer_gen.zero_grad()
+                loss_gen = -loss 
+                loss_gen.backward()
+                optimizer_gen.step()
+
                 total_loss += loss.detach().cpu().item()
-
-                output = {
-                    "batch_loss": np.round(loss.data.cpu().detach().numpy(), 5),
-                    "avg_loss": np.round(total_loss / (i + 1), 5),
-                    "norm": norm,
-                }
-
-                prog_bar.set_postfix(**output)
+                prog_bar.set_postfix(avg_loss=np.round(total_loss / (i + 1), 5))
                 prog_bar.update(1)
 
             if (epoch + 1) % eval_step_size == 0:
-                results = test(
-                    model=model,
-                    datamodule=datamodule,
-                    device=device,
-                    image_metrics=image_metrics,
-                    pixel_metrics=pixel_metrics,
-                    normalize=True,
-                )
-                if LOG_WANDB:
-                    wandb.log({**results, **output})
-            else:
-                if LOG_WANDB:
-                    wandb.log(output)
+                test(model=model, datamodule=datamodule, device=device, image_metrics=image_metrics, 
+                     pixel_metrics=pixel_metrics, normalize=True)
+        
         scheduler.step()
-
-    return results
+    return {}
 
 
 @torch.no_grad()

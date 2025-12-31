@@ -38,6 +38,7 @@ class SuperSimpleNet(nn.Module):
         # feature channels, height and width
         fc, fh, fw = self.feature_extractor.feature_dim
         self.fh = fh
+        self.noise_generator = LearnedNoiseGenerator(fc)#added to perform new noise
         self.fw = fw
 
         # Getting config param to choose Case (A or B)
@@ -88,18 +89,22 @@ class SuperSimpleNet(nn.Module):
         if self.training:
             # add noise to features
             if self.config["noise"]:
+                # Genera il rumore basandosi sulle feature adattate A
+                epsilon_tilde = self.noise_generator(adapted)
+                # Concatenate epsilon_tilde to manage internal batch duplication
+                full_noise = torch.cat([epsilon_tilde, epsilon_tilde], dim=0)
                 # also returns adjusted labels and masks
                 if self.adapt_cls_feat:
                     # ICPR SuperSimpleNet - add noise to adapted only (since non-adapted are not used)
                     _, noised_adapt, mask, label = self.anomaly_generator(
-                        features=None, adapted=adapted, mask=mask, labels=label
+                        features=None, adapted=adapted, mask=mask, labels=label,learned_noise=full_noise
                     )
                     seg_feats = noised_adapt
                     cls_feats = noised_adapt
                 else:
                     # extension of SuperSimpleNet - add (same) noise to adapted and features
                     noised_feat, noised_adapt, mask, label = self.anomaly_generator(
-                        features=features, adapted=adapted, mask=mask, labels=label
+                        features=features, adapted=adapted, mask=mask, labels=label, learned_noise=full_noise
                     )
                     seg_feats = noised_adapt
                     cls_feats = noised_feat
@@ -137,6 +142,11 @@ class SuperSimpleNet(nn.Module):
                 },
             ]
         )
+
+        # Adversarial Generator Optimizer
+        # We use a dedicated learning rate (if not in config, default 1e-4)
+        gen_lr = self.config.get("gen_lr", 0.0001)
+        optim_gen = AdamW(self.noise_generator.parameters(), lr=gen_lr)
         sched = MultiStepLR(
             optim,
             milestones=[self.config["epochs"] * 0.8, self.config["epochs"] * 0.9],
@@ -293,6 +303,23 @@ class Discriminator(nn.Module):
         return map, score
 
 
+class LearnedNoiseGenerator(nn.Module):
+    def __init__(self, f_dim: int):
+        super().__init__()
+        # 3 linear layer (implemented as conv 1x1)
+        self.model = nn.Sequential(
+            nn.Conv2d(f_dim, f_dim // 2, kernel_size=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(f_dim // 2, f_dim // 2, kernel_size=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(f_dim // 2, f_dim, kernel_size=1)
+        )
+        self.apply(init_weights)
+
+    def forward(self, x: Tensor) -> Tensor:
+        # Produce the perturbation epsilon_tilde
+        return self.model(x)
+
 class AnomalyGenerator(nn.Module):
     def __init__(
         self,
@@ -381,64 +408,54 @@ class AnomalyGenerator(nn.Module):
             perlin.append(perlin_thr)
         return torch.cat(perlin)
 
-    def forward(
-        self, features: Tensor | None, adapted: Tensor, mask: Tensor, labels: Tensor
+def forward(
+        self, features: Tensor | None, adapted: Tensor, mask: Tensor, labels: Tensor, learned_noise: Tensor = None
     ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         b, _, h, w = mask.shape
 
-        # duplicate
+
         adapted = torch.cat((adapted, adapted))
         mask = torch.cat((mask, mask))
         labels = torch.cat((labels, labels))
-        # extended ssn case where cls gets non-adapted
         if features is not None:
             features = torch.cat((features, features))
 
-        noise = torch.normal(
-            mean=self.noise_mean,
-            std=self.noise_std,
-            size=adapted.shape,
-            device=adapted.device,
-            requires_grad=False,
-        )
+        # if learned noise is provided, use it; otherwise use standard Gaussian noise 
+        if learned_noise is not None:
+            noise = learned_noise
+        else:
+            noise = torch.normal(
+                mean=self.noise_mean,
+                std=self.noise_std,
+                size=adapted.shape,
+                device=adapted.device,
+                requires_grad=False,
+            )
 
-        # mask indicating which regions will have noise applied
-        # [B * 2, 1, H, W] initial all masked as anomalous
         noise_mask = torch.ones(
             b * 2, 1, h, w, device=adapted.device, requires_grad=False
         )
 
         if not self.config["bad"]:
-            # reshape so it can be multiplied
             masking_labels = labels.reshape(b * 2, 1, 1, 1)
-            # if option w/o bad, don't apply additional to bad (label=1 -> bad)
             noise_mask = noise_mask * (1 - masking_labels)
 
         if not self.config["overlap"]:
-            # if no overlap, don't apply to already anomalous regions (mask=1 -> bad)
             noise_mask = noise_mask * (1 - mask)
 
         if self.config["perlin"]:
-            # [B * 2, 1, H, W]
             perlin_mask = self.generate_perlin(b * 2).to(adapted.device)
-            # if perlin only apply where perlin mask is 1
             noise_mask = noise_mask * perlin_mask
         else:
-            # if not perlin, original SN strategy: don't apply to first half of samples
             noise_mask[:b, ...] = 0
 
-        # update gt mask
         mask = mask + noise_mask
-        # binarize
         mask = torch.where(mask > 0, 1, 0)
 
-        # make new labels. 1 if any part of maks is 1, 0 otherwise
         new_anomalous = mask.reshape(b * 2, -1).any(dim=1).type(torch.float32)
         labels = labels + new_anomalous
-        # binarize
         labels = torch.where(labels > 0, 1, 0)
 
-        # apply masked noise
         perturbed_adapt = adapted + noise * noise_mask
         if features is not None:
             perturbed_feat = features + noise * noise_mask

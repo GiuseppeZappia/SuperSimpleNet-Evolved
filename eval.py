@@ -371,8 +371,8 @@ def run_eval(datasets, ratios, run_id, res_path):
         res_path: path to where  results csv will be saved
     """
     config = {
-        "weights_path": Path(r"./weights"),
-        "datasets_folder": Path(r"./datasets"),
+        "weights_path": Path("/kaggle/working/SuperSimpleNet-Evolved/results"),
+        "datasets_folder": Path("/kaggle/input/mvtec-ad"),
         "results_save_path": res_path,
         "image_save_path": None,  # set to save images
         "score_save_path": None,  # set to save scores
@@ -412,11 +412,12 @@ def run_eval(datasets, ratios, run_id, res_path):
         for cat, datamodule in data_list:
             print("Evaluating", f"{dataset}-{cat}")
             weight_path = (
-                config["weights_path"]
-                / config["run_id"]
-                / dataset
-                / cat
-                / config["ratio"]
+                config["weights_path"] 
+                / config["run_id"] 
+                / "checkpoints" 
+                / dataset 
+                / cat 
+                / config["ratio"] 
                 / "weights.pt"
             )
             model = SuperSimpleNet(image_size=datamodule.image_size, config=config)
@@ -473,17 +474,27 @@ def run_eval(datasets, ratios, run_id, res_path):
             )
 
 
-if __name__ == "__main__":
-    datasets = ["mvtec", "visa", "ksdd2", "sensum"]
-    ratios = ["1", "1", "246", "1"]  # set ratios according to the datasets
-    # ratios = ["", "", "", ""]           # for ICPR (also set the adapt_cls_feat to True in config above!!!)
+# if __name__ == "__main__":
+#     datasets = ["mvtec", "visa", "ksdd2", "sensum"]
+#     ratios = ["1", "1", "246", "1"]  # set ratios according to the datasets
+#     # ratios = ["", "", "", ""]           # for ICPR (also set the adapt_cls_feat to True in config above!!!)
 
-    res_path = Path("./eval_res")
-    run_eval(datasets=datasets, ratios=ratios, run_id=0, res_path=res_path)
-    # to get mean and std of multiple runs, specify them with run_ids
-    generate_result_json(
-        run_ids=["0"],
-        datasets=datasets,
-        ratios=ratios,
-        res_path=res_path,
-    )
+#     res_path = Path("./eval_res")
+#     run_eval(datasets=datasets, ratios=ratios, run_id=0, res_path=res_path)
+#     # to get mean and std of multiple runs, specify them with run_ids
+#     generate_result_json(
+#         run_ids=["0"],
+#         datasets=datasets,
+#         ratios=ratios,
+#         res_path=res_path,
+#     )
+
+if __name__ == "__main__":
+    # Case A Parameter
+    datasets = ["mvtec"]
+    ratios = ["1"]
+    scenario_id = "superSimpleNet-Evolved_resnet18_case_A"
+    res_output_path = Path("/kaggle/working/SuperSimpleNet-Evolvedeval_res")
+    
+    run_eval(datasets=datasets, ratios=ratios, run_id=scenario_id, res_path=res_output_path)
+    generate_result_json(run_ids=[scenario_id], datasets=datasets, ratios=ratios, res_path=res_output_path)
