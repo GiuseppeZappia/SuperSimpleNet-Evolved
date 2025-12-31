@@ -489,12 +489,23 @@ def run_eval(datasets, ratios, run_id, res_path):
 #         res_path=res_path,
 #     )
 
+import argparse
+
 if __name__ == "__main__":
-    # Case A Parameter
-    datasets = ["mvtec"]
-    ratios = ["1"]
-    scenario_id = "superSimpleNet-Evolved_resnet18_case_A"
-    res_output_path = Path("/kaggle/working/SuperSimpleNet-Evolvedeval_res")
+    parser = argparse.ArgumentParser(description="Valutazione SuperSimpleNet")
+    parser.add_argument("--run_id", type=str, default="superSimpleNet-Evolved_resnet18_case_A", help="ID della cartella dei risultati")
+    parser.add_argument("--dataset", type=str, default="mvtec", help="Nome del dataset")
+    parser.add_argument("--ratio", type=str, default="1", help="Ratio usato in training")
     
-    run_eval(datasets=datasets, ratios=ratios, run_id=scenario_id, res_path=res_output_path)
-    generate_result_json(run_ids=[scenario_id], datasets=datasets, ratios=ratios, res_path=res_output_path)
+    args = parser.parse_args()
+
+    # Kaggle configuration
+    datasets = [args.dataset]
+    ratios = [args.ratio]
+    res_path = Path("/kaggle/working/SuperSimpleNet-Evolved/eval_res")
+    
+    # Start evaluation
+    run_eval(datasets=datasets, ratios=ratios, run_id=args.run_id, res_path=res_path)
+    
+    # Generate JSON resume
+    generate_result_json(run_ids=[args.run_id], datasets=datasets, ratios=ratios, res_path=res_path)
