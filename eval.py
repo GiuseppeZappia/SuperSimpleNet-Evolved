@@ -372,7 +372,7 @@ def run_eval(datasets, ratios, run_id, res_path):
     """
     config = {
         "weights_path": Path("/kaggle/working/SuperSimpleNet-Evolved/results"),
-        "datasets_folder": Path("/kaggle/input/mvtec-ad"),
+        "datasets_folder": Path("/kaggle/working"),
         "results_save_path": res_path,
         "image_save_path": None,  # set to save images
         "score_save_path": None,  # set to save scores
