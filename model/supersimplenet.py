@@ -408,61 +408,61 @@ class AnomalyGenerator(nn.Module):
             perlin.append(perlin_thr)
         return torch.cat(perlin)
 
-def forward(
-        self, features: Tensor | None, adapted: Tensor, mask: Tensor, labels: Tensor, learned_noise: Tensor = None
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
-        b, _, h, w = mask.shape
+    def forward(
+            self, features: Tensor | None, adapted: Tensor, mask: Tensor, labels: Tensor, learned_noise: Tensor = None
+        ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+            b, _, h, w = mask.shape
 
 
-        adapted = torch.cat((adapted, adapted))
-        mask = torch.cat((mask, mask))
-        labels = torch.cat((labels, labels))
-        if features is not None:
-            features = torch.cat((features, features))
+            adapted = torch.cat((adapted, adapted))
+            mask = torch.cat((mask, mask))
+            labels = torch.cat((labels, labels))
+            if features is not None:
+                features = torch.cat((features, features))
 
-        # if learned noise is provided, use it; otherwise use standard Gaussian noise 
-        if learned_noise is not None:
-            noise = learned_noise
-        else:
-            noise = torch.normal(
-                mean=self.noise_mean,
-                std=self.noise_std,
-                size=adapted.shape,
-                device=adapted.device,
-                requires_grad=False,
+            # if learned noise is provided, use it; otherwise use standard Gaussian noise 
+            if learned_noise is not None:
+                noise = learned_noise
+            else:
+                noise = torch.normal(
+                    mean=self.noise_mean,
+                    std=self.noise_std,
+                    size=adapted.shape,
+                    device=adapted.device,
+                    requires_grad=False,
+                )
+
+            noise_mask = torch.ones(
+                b * 2, 1, h, w, device=adapted.device, requires_grad=False
             )
 
-        noise_mask = torch.ones(
-            b * 2, 1, h, w, device=adapted.device, requires_grad=False
-        )
+            if not self.config["bad"]:
+                masking_labels = labels.reshape(b * 2, 1, 1, 1)
+                noise_mask = noise_mask * (1 - masking_labels)
 
-        if not self.config["bad"]:
-            masking_labels = labels.reshape(b * 2, 1, 1, 1)
-            noise_mask = noise_mask * (1 - masking_labels)
+            if not self.config["overlap"]:
+                noise_mask = noise_mask * (1 - mask)
 
-        if not self.config["overlap"]:
-            noise_mask = noise_mask * (1 - mask)
+            if self.config["perlin"]:
+                perlin_mask = self.generate_perlin(b * 2).to(adapted.device)
+                noise_mask = noise_mask * perlin_mask
+            else:
+                noise_mask[:b, ...] = 0
 
-        if self.config["perlin"]:
-            perlin_mask = self.generate_perlin(b * 2).to(adapted.device)
-            noise_mask = noise_mask * perlin_mask
-        else:
-            noise_mask[:b, ...] = 0
+            mask = mask + noise_mask
+            mask = torch.where(mask > 0, 1, 0)
 
-        mask = mask + noise_mask
-        mask = torch.where(mask > 0, 1, 0)
+            new_anomalous = mask.reshape(b * 2, -1).any(dim=1).type(torch.float32)
+            labels = labels + new_anomalous
+            labels = torch.where(labels > 0, 1, 0)
 
-        new_anomalous = mask.reshape(b * 2, -1).any(dim=1).type(torch.float32)
-        labels = labels + new_anomalous
-        labels = torch.where(labels > 0, 1, 0)
+            perturbed_adapt = adapted + noise * noise_mask
+            if features is not None:
+                perturbed_feat = features + noise * noise_mask
+            else:
+                perturbed_feat = None
 
-        perturbed_adapt = adapted + noise * noise_mask
-        if features is not None:
-            perturbed_feat = features + noise * noise_mask
-        else:
-            perturbed_feat = None
-
-        return perturbed_feat, perturbed_adapt, mask, labels
+            return perturbed_feat, perturbed_adapt, mask, labels
 
 
 class AnomalyMapGenerator(nn.Module):
