@@ -56,7 +56,7 @@ def train(
         total_loss = 0
         with tqdm(total=len(train_loader), desc=f"{epoch}/{epochs}", unit="batch") as prog_bar:
             for i, batch in enumerate(train_loader):
-                # Gradient reset
+                # 1. Reset all gradients at the start
                 optimizer.zero_grad()
                 optimizer_gen.zero_grad()
 
@@ -68,10 +68,10 @@ def train(
                 label = batch["label"].to(device).type(torch.float32)
                 is_segmented = batch["is_segmented"].to(device).type(torch.float32)
 
-                # Modification B: Receive noise tensor from forward pass
+                # Forward pass
                 anomaly_map, score, mask, label, noise = model.forward(image_batch, mask, label)
 
-                # Computing Standard Loss (Segmentation + Classification)
+                # Standard Loss (Segmentation + Classification)
                 seg_focal = focal_loss(torch.sigmoid(anomaly_map), mask, reduction=None)
                 seg_l1 = torch.zeros_like(anomaly_map)
                 seg_l1[mask == 0] = torch.clip(anomaly_map[mask == 0] + th, min=0)
@@ -92,26 +92,29 @@ def train(
                 seg_loss = good_loss + bad_loss + focal_val
                 loss_discriminator = seg_loss + focal_loss(torch.sigmoid(score), label)
 
-                # --- DISCRIMINATOR STEP ---
-                # Always update the Discriminator/Adaptor
+                # --- GRADIENT COMPUTATION PHASE ---
+                
+                # Compute gradients for Discriminator
+                # We use retain_graph=True because the Generator update also needs the graph
                 loss_discriminator.backward(retain_graph=True)
+
+                # Compute gradients for Generator (Adversarial Step) every 4th batch
+                is_gen_step = (i + 1) % 4 == 0
+                if is_gen_step:
+                    loss_magnitude = torch.mean(noise ** 2)
+                    # Total Generator Loss: maximize error + minimize magnitude
+                    loss_gen = -loss_discriminator + (10.0 * loss_magnitude)
+                    loss_gen.backward()
+
+                # --- WEIGHT UPDATE PHASE ---
+                # Now that all gradients are computed, we can safely perform in-place updates
+
                 if clip_grad:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+                
                 optimizer.step()
-
-                # --- MODIFICATION C: ADVERSARIAL GENERATOR STEP (3:1 Ratio) ---
-                # We update the Generator only every 4th step
-                if (i + 1) % 4 == 0:
-                    optimizer_gen.zero_grad()
-                    
-                    # Modification B: Calculate Regularization Loss (L2 norm)
-                    # We penalize the noise magnitude to keep it subtle
-                    loss_magnitude = torch.mean(noise ** 2)
-                    
-                    # Total Generator Loss: Minimize Discriminator success + keep noise small
-                    loss_gen = -loss_discriminator + (10.0 * loss_magnitude)
-                    
-                    loss_gen.backward()
+                
+                if is_gen_step:
                     optimizer_gen.step()
 
                 total_loss += loss_discriminator.detach().cpu().item()
@@ -124,7 +127,6 @@ def train(
         
         scheduler.step()
     return {}
-
 
 @torch.no_grad()
 def test(
