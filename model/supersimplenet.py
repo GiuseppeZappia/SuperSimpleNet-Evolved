@@ -28,8 +28,6 @@ class SuperSimpleNet(nn.Module):
         self.image_size = image_size
         self.config = config
         self.feature_extractor = FeatureExtractor(
-            #changing the backbone to "resnet18" from "wide_resnet50_2"
-            #the new size of the channels are automatically managed in feature_extractor.py
             backbone=config.get("backbone", "resnet18"),
             layers=config.get("layers", ["layer2", "layer3"]),
             patch_size=config.get("patch_size", 3),
@@ -38,9 +36,10 @@ class SuperSimpleNet(nn.Module):
         # feature channels, height and width
         fc, fh, fw = self.feature_extractor.feature_dim
         self.fh = fh
-        self.noise_generator = LearnedNoiseGenerator(fc)#added to perform new noise
         self.fw = fw
 
+        # Updated: Initialize LearnedNoiseGenerator with fc (features) and z_dim (e.g., 32)
+        self.noise_generator = LearnedNoiseGenerator(fc, z_dim=32)
         # Getting config param to choose Case (A or B)
         non_linear_adaptor = config.get("non_linear_adaptor", False)
         # giving to FeatureAdaptor the choice of Case
@@ -298,11 +297,13 @@ class Discriminator(nn.Module):
 
 
 class LearnedNoiseGenerator(nn.Module):
-    def __init__(self, f_dim: int):
+    def __init__(self, f_dim: int, z_dim: int = 32):
         super().__init__()
-        # 3 linear layer (implemented as conv 1x1)
+        self.z_dim = z_dim
+        # The first layer now takes (f_dim + z_dim) channels
+        # We concatenate the features with the random seed z
         self.model = nn.Sequential(
-            nn.Conv2d(f_dim, f_dim // 2, kernel_size=1),
+            nn.Conv2d(f_dim + z_dim, f_dim // 2, kernel_size=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(f_dim // 2, f_dim // 2, kernel_size=1),
             nn.ReLU(inplace=True),
@@ -311,10 +312,15 @@ class LearnedNoiseGenerator(nn.Module):
         self.apply(init_weights)
 
     def forward(self, x: Tensor) -> Tensor:
-        # Modification A: Constrain output using tanh and a small scalar
-        # Original paper uses sigma=0.015. 
-        # We use 0.1 to allow more flexibility while preventing feature explosion.
-        raw_noise = self.model(x)
+        # Get dimensions and create the random noise vector z
+        b, _, h, w = x.shape
+        z = torch.randn(b, self.z_dim, h, w, device=x.device)
+        
+        # Modification: Concatenate features A (x) and random seed z
+        input_combined = torch.cat([x, z], dim=1)
+        
+        # Pass through the generator and apply the constraints (tanh * 0.1)
+        raw_noise = self.model(input_combined)
         return torch.tanh(raw_noise) * 0.1
     
 
