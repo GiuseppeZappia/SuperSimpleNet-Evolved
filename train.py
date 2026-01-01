@@ -348,7 +348,7 @@ def main_mvtec(device, config):
         "screw",
         # "pill",
         # "capsule",
-        "carpet",
+        # "carpet",
         # "grid",
         # "tile",
         # "wood",
@@ -357,7 +357,7 @@ def main_mvtec(device, config):
         # "toothbrush",
         # "transistor",
         # "metal_nut",
-        "bottle",
+        # "bottle",
         # "hazelnut",
         # "leather",
     ]
