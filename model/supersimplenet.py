@@ -67,42 +67,37 @@ class SuperSimpleNet(nn.Module):
             output_size=image_size, sigma=4
         )
 
+    # Updated SuperSimpleNet.forward to return the noise tensor during training
     def forward(
         self,
         images: Tensor,
         mask: Tensor = None,
         label: Tensor = None,
-    ) -> Tensor | tuple[Tensor, Tensor]:
+    ) -> Tensor | tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         # feature extraction, upscaling and neigh. aggregation
-        # [B, F_dim, H, W]
         features = self.feature_extractor(images)
         adapted = self.feature_adaptor(features)
 
         seg_feats = adapted
         if self.adapt_cls_feat:
-            # ICPR SuperSimpleNet - cls and seg both use adapted feat
             cls_feats = adapted
         else:
-            # extension SuperSimpleNet - adapt only seg feats
             cls_feats = features
 
         if self.training:
+            full_noise = None
             # add noise to features
             if self.config["noise"]:
-                # Genera il rumore basandosi sulle feature adattate A
                 epsilon_tilde = self.noise_generator(adapted)
-                # Concatenate epsilon_tilde to manage internal batch duplication
                 full_noise = torch.cat([epsilon_tilde, epsilon_tilde], dim=0)
-                # also returns adjusted labels and masks
+                
                 if self.adapt_cls_feat:
-                    # ICPR SuperSimpleNet - add noise to adapted only (since non-adapted are not used)
                     _, noised_adapt, mask, label = self.anomaly_generator(
-                        features=None, adapted=adapted, mask=mask, labels=label,learned_noise=full_noise
+                        features=None, adapted=adapted, mask=mask, labels=label, learned_noise=full_noise
                     )
                     seg_feats = noised_adapt
                     cls_feats = noised_adapt
                 else:
-                    # extension of SuperSimpleNet - add (same) noise to adapted and features
                     noised_feat, noised_adapt, mask, label = self.anomaly_generator(
                         features=features, adapted=adapted, mask=mask, labels=label, learned_noise=full_noise
                     )
@@ -112,14 +107,13 @@ class SuperSimpleNet(nn.Module):
             anomaly_map, anomaly_score = self.discriminator(
                 seg_features=seg_feats, cls_features=cls_feats
             )
-            return anomaly_map, anomaly_score, mask, label
+            # Added full_noise to return values for regularization loss calculation
+            return anomaly_map, anomaly_score, mask, label, full_noise
         else:
             anomaly_map, anomaly_score = self.discriminator(
                 seg_features=seg_feats, cls_features=cls_feats
             )
-
             anomaly_map = self.anomaly_map_generator(anomaly_map)
-
             return anomaly_map, anomaly_score
 
     def get_optimizers(self) -> tuple[Optimizer, LRScheduler]:
@@ -317,8 +311,12 @@ class LearnedNoiseGenerator(nn.Module):
         self.apply(init_weights)
 
     def forward(self, x: Tensor) -> Tensor:
-        # Produce the perturbation epsilon_tilde
-        return self.model(x)
+        # Modification A: Constrain output using tanh and a small scalar
+        # Original paper uses sigma=0.015. 
+        # We use 0.1 to allow more flexibility while preventing feature explosion.
+        raw_noise = self.model(x)
+        return torch.tanh(raw_noise) * 0.1
+    
 
 class AnomalyGenerator(nn.Module):
     def __init__(

@@ -34,7 +34,6 @@ from common.visualizer import Visualizer
 from common.results_writer import ResultsWriter
 from common.loss import focal_loss
 
-
 def train(
     model: SuperSimpleNet,
     epochs: int,
@@ -47,15 +46,15 @@ def train(
     eval_step_size: int = 4,
 ):
     model.to(device)
-    # Riceviamo entrambi gli ottimizzatori
     optimizer, optimizer_gen, scheduler = model.get_optimizers()
 
     model.train()
     train_loader = datamodule.train_dataloader()
+    
     for epoch in range(epochs):
         model.train()
         total_loss = 0
-        with tqdm(total=len(train_loader), desc=str(epoch) + "/" + str(epochs), unit="batch") as prog_bar:
+        with tqdm(total=len(train_loader), desc=f"{epoch}/{epochs}", unit="batch") as prog_bar:
             for i, batch in enumerate(train_loader):
                 # Gradient reset
                 optimizer.zero_grad()
@@ -69,10 +68,10 @@ def train(
                 label = batch["label"].to(device).type(torch.float32)
                 is_segmented = batch["is_segmented"].to(device).type(torch.float32)
 
-                # Forward (it includes the generation of the learned noise)
-                anomaly_map, score, mask, label = model.forward(image_batch, mask, label)
+                # Modification B: Receive noise tensor from forward pass
+                anomaly_map, score, mask, label, noise = model.forward(image_batch, mask, label)
 
-                # Computing Loss standard (Segmentation + Classification)
+                # Computing Standard Loss (Segmentation + Classification)
                 seg_focal = focal_loss(torch.sigmoid(anomaly_map), mask, reduction=None)
                 seg_l1 = torch.zeros_like(anomaly_map)
                 seg_l1[mask == 0] = torch.clip(anomaly_map[mask == 0] + th, min=0)
@@ -91,29 +90,31 @@ def train(
                 focal_val = seg_focal[is_segmented_bool].mean() if is_segmented_bool.any() else 0
 
                 seg_loss = good_loss + bad_loss + focal_val
-                loss = seg_loss + focal_loss(torch.sigmoid(score), label)
+                loss_discriminator = seg_loss + focal_loss(torch.sigmoid(score), label)
 
-                # --- ADVERSARIAL STEP  ---
-                # The discriminator minimizes the loss
-                # The generator maximizes the loss (negative sign)
-                
-                loss.backward(retain_graph=True) # Retain graph for second step
-                
-
-                # Update Generator: we use the negative loss to "win" if the discriminator is wrong
-                # Note: we optimize only the parameters of model.noise_generator
-                optimizer_gen.zero_grad()
-                loss_gen = -loss 
-                loss_gen.backward()
-
-                                # Update Discriminator and Adaptor
+                # --- DISCRIMINATOR STEP ---
+                # Always update the Discriminator/Adaptor
+                loss_discriminator.backward(retain_graph=True)
                 if clip_grad:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
                 optimizer.step()
 
-                optimizer_gen.step()
+                # --- MODIFICATION C: ADVERSARIAL GENERATOR STEP (3:1 Ratio) ---
+                # We update the Generator only every 4th step
+                if (i + 1) % 4 == 0:
+                    optimizer_gen.zero_grad()
+                    
+                    # Modification B: Calculate Regularization Loss (L2 norm)
+                    # We penalize the noise magnitude to keep it subtle
+                    loss_magnitude = torch.mean(noise ** 2)
+                    
+                    # Total Generator Loss: Minimize Discriminator success + keep noise small
+                    loss_gen = -loss_discriminator + (10.0 * loss_magnitude)
+                    
+                    loss_gen.backward()
+                    optimizer_gen.step()
 
-                total_loss += loss.detach().cpu().item()
+                total_loss += loss_discriminator.detach().cpu().item()
                 prog_bar.set_postfix(avg_loss=np.round(total_loss / (i + 1), 5))
                 prog_bar.update(1)
 
