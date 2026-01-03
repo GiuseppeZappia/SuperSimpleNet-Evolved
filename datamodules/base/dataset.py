@@ -335,7 +335,8 @@ class SSNDataset(Dataset):
                 self.not_founded_mask+=1    
                 print(f"Warning: Mask not found at {mask_path}, using empty mask. Not founded number {self.not_founded_mask}")
                 mask = mask / 255.0
-            mask = cv2.imread(mask_path, flags=0) / 255.0
+            else:
+                mask = cv2.imread(mask_path, flags=0) / 255.0
 
             if self.dilate is not None and self.split == Split.TRAIN:
                 mask = cv2.dilate(mask, np.ones((self.dilate, self.dilate)))
