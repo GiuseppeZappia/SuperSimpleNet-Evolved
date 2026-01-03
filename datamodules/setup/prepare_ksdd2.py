@@ -15,7 +15,7 @@ def main():
         name="KolektorSDD2",
         filename="KolektorSDD2.zip",
         url="https://go.vicos.si/kolektorsdd2",
-        # hash="1ed0f628122776ace4965afa30dfe316",
+        hashsum="1ed0f628122776ace4965afa30dfe316",
     )
 
     if path.exists():
