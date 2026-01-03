@@ -55,7 +55,7 @@ class SSNDataset(Dataset):
 
         self.dilate = dilate
         self.dt = dt
-
+        self.not_founded_mask=0
         self.counter = 0
         self.generated_num_pos: int = 0
         self.neg_retrieval_freq: np.ndarray
@@ -328,6 +328,13 @@ class SSNDataset(Dataset):
             # normal or not segmented are all zero
             mask = np.zeros(shape=image.shape[:2])
         else:
+            if mask is None:
+                # If image doesn't exist, create an empty (black) mask
+                # of the same size as the image to avoid blocking training.
+                mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+                self.not_founded_mask+=1    
+                print(f"Warning: Mask not found at {mask_path}, using empty mask. Not founded number {self.not_founded_mask}")
+                mask = mask / 255.0
             mask = cv2.imread(mask_path, flags=0) / 255.0
 
             if self.dilate is not None and self.split == Split.TRAIN:
