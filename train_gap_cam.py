@@ -28,7 +28,7 @@ from datamodules.sensum import Sensum, RatioSegmented
 from datamodules.mvtec import MVTec
 from datamodules.visa import Visa
 
-from model.supersimplenet import SuperSimpleNet
+from model.supersimplenet_gap_cam import SuperSimpleNet
 
 from common.visualizer import Visualizer
 from common.results_writer import ResultsWriter
