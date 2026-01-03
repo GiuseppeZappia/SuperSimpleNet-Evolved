@@ -84,17 +84,12 @@ class SuperSimpleNet(nn.Module):
             return anomaly_map, anomaly_score
 
     def get_optimizers(self) -> tuple[Optimizer, LRScheduler]:
-        seg_params, dec_params = self.discriminator.get_params()
+        dec_params = self.discriminator.get_params()
         optim = AdamW(
             [
                 {
                     "params": self.feature_adaptor.parameters(),
                     "lr": self.config["adapt_lr"],
-                },
-                {
-                    "params": seg_params,
-                    "lr": self.config["seg_lr"],
-                    "weight_decay": 0.00001,
                 },
                 {
                     "params": dec_params,
@@ -188,9 +183,8 @@ class Discriminator(nn.Module):
             self.apply(init_weights)
 
     def get_params(self):
-        seg_params = self.seg.parameters()
         dec_params = list(self.dec_head.parameters()) + list(self.fc_score.parameters())
-        return seg_params, dec_params
+        return dec_params
 
     def forward(self, cls_features: Tensor) -> tuple[Tensor, Tensor]:
             # Feature extraction through the classification head
