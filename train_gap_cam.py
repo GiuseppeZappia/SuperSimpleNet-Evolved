@@ -4,7 +4,8 @@ import sys
 from datamodules.base import Supervision
 
 LOG_WANDB = False
-
+import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import copy
 import json
 from pathlib import Path
@@ -666,7 +667,7 @@ def run_sup(data_name):
         "noise_std": 0.015,
         "perlin_thr": 0.6,
         "seed": 456654,
-        "batch": 32,
+        "batch": 8,
         "epochs": 300,
         "flips": True,
         "seg_lr": 0.0002,
