@@ -328,10 +328,10 @@ class SSNDataset(Dataset):
             # normal or not segmented are all zero
             mask = np.zeros(shape=image.shape[:2])
         else:
+            mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
             if mask is None:
                 # If image doesn't exist, create an empty (black) mask
                 # of the same size as the image to avoid blocking training.
-                mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
                 self.not_founded_mask+=1    
                 print(f"Warning: Mask not found at {mask_path}, using empty mask. Not founded number {self.not_founded_mask}")
                 mask = mask / 255.0
