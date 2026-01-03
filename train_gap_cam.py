@@ -65,6 +65,14 @@ def train(
 
                 image_batch = batch["image"].to(device)
 
+                mask = batch["mask"].type(torch.float32).to(device)
+                mask = F.interpolate(
+                    mask.unsqueeze(1),
+                    size=(model.fh, model.fw),
+                    mode="bilinear",
+                    align_corners=True,
+                )
+                mask = torch.where(mask < 0.5, torch.zeros_like(mask), torch.ones_like(mask))
 
                 label = batch["label"].to(device).type(torch.float32)
 
@@ -72,7 +80,7 @@ def train(
                 # as the segmentation head is removed.
                 
                 # Forward pass: returns CAM map, score and updated labels (for synthetic anomalies)
-                anomaly_map, score, label = model.forward(image_batch, None, label)
+                anomaly_map, score, label = model.forward(image_batch, mask, label)
 
                 loss = focal_loss(torch.sigmoid(score), label)
 
