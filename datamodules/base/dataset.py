@@ -325,18 +325,20 @@ class SSNDataset(Dataset):
         )
 
         if label_index == 0 or not is_segmented:
-            # normal or not segmented are all zero
-            mask = np.zeros(shape=image.shape[:2])
+            # For normal images or non-segmented images, create a zero mask
+            mask = np.zeros(shape=image.shape[:2], dtype=np.float32)
         else:
-            mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
-            if mask is None:
-                # If image doesn't exist, create an empty (black) mask
-                # of the same size as the image to avoid blocking training.
-                self.not_founded_mask+=1    
-                print(f"Warning: Mask not found at {mask_path}, using empty mask. Not founded number {self.not_founded_mask}")
-                mask = mask / 255.0
+            # Try to load the GT mask
+            mask_data = cv2.imread(mask_path, flags=0)
+            
+            if mask_data is None:
+                # If the file doesn't exist (e.g., naming errors on Kaggle), use an empty mask
+                self.not_founded_mask += 1    
+                print(f"Warning: Mask not found at {mask_path}. Usata maschera vuota. Totali mancanti: {self.not_founded_mask}")
+                mask = np.zeros(shape=image.shape[:2], dtype=np.float32)
             else:
-                mask = cv2.imread(mask_path, flags=0) / 255.0
+                # File founded, classic normalization
+                mask = mask_data.astype(np.float32) / 255.0
 
             if self.dilate is not None and self.split == Split.TRAIN:
                 mask = cv2.dilate(mask, np.ones((self.dilate, self.dilate)))
