@@ -718,7 +718,7 @@ def main():
     args = parser.parse_args()
 
     if args.dataset in ["mvtec", "visa"]:
-        run_unsup(args.dataset, args.backbone, args.case)
+        run_unsup(args.dataset, args.backbone, args.case, args.beta)
     # if args.dataset in ["sensum", "ksdd2"]:
     #     run_sup(args.dataset, args.backbone)
 
