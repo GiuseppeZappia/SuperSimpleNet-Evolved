@@ -612,7 +612,7 @@ def main_sensum(device, config, supervision):
             )
 
 # backbone and case selection added to unsupervised run function
-def run_unsup(data_name, backbone_name, case):
+def run_unsup(data_name, backbone_name, case,noise_scale=0.1):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     config = {
@@ -620,6 +620,7 @@ def run_unsup(data_name, backbone_name, case):
         "datasets_folder": Path("/kaggle/input/mvtec-ad"), # changed the path in order to use mvtec dataset from kaggle input
         "num_workers": 8,
         "setup_name": f"superSimpleNet-Evolved_{backbone_name}_case_{case}", # to distinghuish the runs with different backbones and case
+        "learned_noise_scale": noise_scale,
         "backbone": backbone_name,
         "non_linear_adaptor": (case == "B"),
         "layers": ["layer2", "layer3"],
@@ -711,7 +712,9 @@ def main():
     
     parser.add_argument("--backbone", type=str, default="resnet18", help="Backbone architecture")
     parser.add_argument("--case", type=str, default="A", choices=["A", "B"], help="Case A (linear) or B (non-linear)")
-
+    
+    #to choose noise scale
+    parser.add_argument("--beta", type=float, default=0.1, help="Scale factor for learned noise (e.g. 0.015, 0.1, 0.5, 0.05)")
     args = parser.parse_args()
 
     if args.dataset in ["mvtec", "visa"]:

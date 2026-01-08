@@ -38,8 +38,9 @@ class SuperSimpleNet(nn.Module):
         self.fh = fh
         self.fw = fw
 
-        # Updated: Initialize LearnedNoiseGenerator with fc (features) and z_dim (e.g., 32)
-        self.noise_generator = LearnedNoiseGenerator(fc, z_dim=32)
+        beta = config.get("learned_noise_scale", 0.1)
+        # Updated: Initialize LearnedNoiseGenerator with fc (features) and z_dim (e.g., 32)and noise scale 
+        self.noise_generator = LearnedNoiseGenerator(fc, z_dim=32, noise_scale=beta)
         # Getting config param to choose Case (A or B)
         non_linear_adaptor = config.get("non_linear_adaptor", False)
         # giving to FeatureAdaptor the choice of Case
@@ -297,9 +298,10 @@ class Discriminator(nn.Module):
 
 
 class LearnedNoiseGenerator(nn.Module):
-    def __init__(self, f_dim: int, z_dim: int = 32):
+    def __init__(self, f_dim: int, z_dim: int = 32, noise_scale: float = 0.1): #added noise_scale to choose scale of learned noise
         super().__init__()
         self.z_dim = z_dim
+        self.noise_scale = noise_scale
         # The first layer now takes (f_dim + z_dim) channels
         # We concatenate the features with the random seed z
         self.model = nn.Sequential(
@@ -321,8 +323,8 @@ class LearnedNoiseGenerator(nn.Module):
         
         # Pass through the generator and apply the constraints (tanh * 0.1)
         raw_noise = self.model(input_combined)
-        return torch.tanh(raw_noise) * 0.1
-    
+        return torch.tanh(raw_noise) * self.noise_scale
+
 
 class AnomalyGenerator(nn.Module):
     def __init__(
