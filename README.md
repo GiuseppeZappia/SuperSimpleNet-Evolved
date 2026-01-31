@@ -1,165 +1,102 @@
-# SuperSimpleNet
+# SuperSimpleNet-Evolved: Industrial Anomaly Detection
 
-Official implementation of SuperSimpleNet.
+> **Advanced Optimization & Weakly-Supervised Learning for Industrial Inspection** > *Academic Project - Machine & Deep Learning Course (2025-2026)*
 
-[![Model on HF](https://huggingface.co/datasets/huggingface/badges/resolve/main/model-on-hf-md.svg)](https://huggingface.co/papers/2508.19060)
+[![Python](https://img.shields.io/badge/Python-3.10-blue)](https://www.python.org/)
+[![Framework](https://img.shields.io/badge/PyTorch-Deep%20Learning-red)](https://pytorch.org/)
+[![Status](https://img.shields.io/badge/Status-Completed-success)]()
 
-Original: [SuperSimpleNet : Unifying Unsupervised and Supervised Learning for Fast and Reliable Surface Defect Detection](https://arxiv.org/abs/2408.03143) - ICPR (International Conference on Pattern Recognition) 2024.
+## Overview
 
-Extension to mixed supervision: [No Label Left Behind: A Unified Surface Defect Detection Model for all Supervision Regimes](https://arxiv.org/abs/2508.19060) - JIMS (Journal of Intelligent Manufacturing) 2025.
+**SuperSimpleNet-Evolved** is a fork of the state-of-the-art [SuperSimpleNet](https://github.com/blaz-r/SuperSimpleNet) architecture. This project investigates the trade-offs between computational efficiency and detection robustness in industrial settings.
 
----
+The goal was to transform a research model into an **Edge-ready** solution while reducing the dependency on expensive pixel-wise annotations.
 
-Unsupervised ICPR version of SuperSimpleNet is also available in [Anomalib](https://github.com/open-edge-platform/anomalib).
+### Project Documentation
+You can find the detailed analysis and source files in the `docs/` directory:
 
-## Environment
-```bash
-conda create -n ssn_env python=3.10
-pip install -r requirements.txt
-```
-
-The project uses wandb for logging, but it's optional. 
-To enable this: uncomment wandb from requirements.txt to install and set `LOG_WANDB=True` at the top of train.py.
-
-## Datasets
-
-Follow the steps below to prepare all 4 datasets used in the paper. The code used to download datasets requires the env from the previous step.
-If you already have the files prepared for a specific dataset, you can change the path in `eval.py`/`train.py`.
-
-Note that for the VisA, the data needs to be correctly split and stored inside `visa/visa_pytorch`. 
-This is handled automatically with the provided script. Ensure that the splits are correct if you are using existing VisA data.
-
-1. Change directory to `./datamodules/setup/`.
-2. Run `prepare_mvtec.py` to download and extract MVTec files.
-3. Run `prepare_visa.py` to download, extract, and **prepare splits** for VisA files.
-4. Run `prepare_ksdd2.py` to download and extract KSDD2 files.
-5. To download SensumSODF, request a link on the official site.
-   - Download the data from the link you receive [here](https://www.sensum.eu/sensumsodf-dataset/) and extract it to the dataset folder.
-   
-   - Then download SensumSODF 3-fold CV [split files](https://drive.google.com/file/d/1CrolrOHHm3wHaKu6JKqQ62qQGclwDKBM/view?usp=sharing). Extract them and place the `sensum_splits` folder inside the SensumSODF root.
-   
-   - If you are evaluating your method on SensumSODF, use the provided split files within the 3-fold CV setting for fair comparison.
-
-The final structure should then look like this (case-sensitive):
-
-```
-datasets/
-    KolektorSDD2/
-        train/...
-        test/...
-        split_weakly_0.pyb
-        ...
-    SensumSODF/
-        capsule/...
-        softgel/...
-        sensum_splits/
-            capsule/
-                0/...
-                ...
-            softgel/...
-    mvtec/
-         bottle/...
-         ...
-    visa/
-        visa_pytorch/
-            candle/
-            ....
-```
-
-
-## Checkpoints
-
-[![Model on HF](https://huggingface.co/datasets/huggingface/badges/resolve/main/model-on-hf-sm.svg)](https://huggingface.co/papers/2508.19060)
-
-Checkpoints are available [on HuggingFace](https://huggingface.co/papers/2508.19060) and on [GDrive](https://drive.google.com/drive/folders/1bBKL7-xFgNrzOZVnED0jBgqT5poeYf0d). We recommend that you use the latest JIMS weights and JIMS code. 
-Extract checkpoints into `./weights` path and ensure they are all inside a directory with run_id 0: 
-```
-./weights/
-   0/
-      ksdd2/
-         ksdd2/
-            <ratio> (e.g. 246)/
-               weights.pt
-      sensum/
-      mvtec/
-      visa/
-```
-
-The original ICPR checkpoints don't have the `ratio` subdirectory, 
-while the latest JIMS version also has ratio subdirectory for each mixed supervision scenario.
-
-We report an average of 5 runs in our paper, but the weights from the link are only for a single run.
-Therefore, the results won't exactly match the ones reported in the paper.
-
-We also include the reported mean and std as a json inside `paper_results` for all datasets in the paper.
-
-## Evaluate
-
-Evaluate using the checkpoints:
-
-```bash
-python eval.py
-```
-
-Slurm script `run_slurm_eval.sh` is also provided to execute evaluation on a slurm based system.
-
----
-Config for the model and datasets is contained within the eval.py file. 
-
-## Train
-
-Train the model:
-
-```bash
-python train.py <dataset_name>
-```
-Possible dataset names are: `mvtec`, `visa`, `sensum`, and `ksdd2`.
-
-Slurm script `run_slurm_train.sh` is also provided to execute training on a slurm based system.
+- 📄 **Full Technical Report:** [Relazione_Progetto_ML_&_DL_ZAPPIA_GIUSEPPE .pdf](docs/Relazione_Progetto_ML_&_DL_ZAPPIA_GIUSEPPE%20.pdf)
+- 📊 **Presentation Slides:** [Presentazione_ML&DL.pdf](docs/Presentazione_ML&DL.pdf)
+- 🧪 **Experiments Notebook:** [progetto-ml-dl-zappia-giuseppe.ipynb](docs/progetto-ml-dl-zappia-giuseppe.ipynb)
 
 ---
 
-Config for the model and datasets is contained within train.py file. If you want to modify training params, change the values there.
+## Key Contributions & Innovations
 
-**The ICPR and JIMS versions mostly differ in 3 parameters:** 
-`dt` (distance transform), `dilate` (label dilation), and `adapt_cls_feat` (use adapted features for cls head or not).
+This repository introduces three major architectural evolutions derived from extensive experimentation on **MVTec-AD** and **KSDD2** datasets.
 
-We recommend taking the MVTec parameters when training on your own **unsupervised** dataset and SenumSODF parameters for **supervised** dataset.
+### 1. Efficiency Optimization (Edge Computing Focus)
+Replaced the heavy `WideResNet50` backbone with a lightweight `ResNet18` to test limits on resource-constrained devices (simulated on NVIDIA Tesla P100).
 
-## Performance benchmark
+* **Objective:** Reduce latency for real-time manufacturing lines.
+* **Result:**
+    * 📉 **-80% GPU Memory Usage** (Dropped from ~270MB to **52MB**).
+    * 🚀 **4x Higher Throughput** (Increased from ~96 img/s to **~400 img/s**).
+    * ✅ **100% I-AUROC** maintained on structural objects (e.g., *Bottle*).
 
-Use the code inside `./perf` to evaluate performance metrics (inference speed, throughput, memory consumption, flops):
+### 2. Learned Noise Generator (Adversarial Training)
+Identified a critical "Backbone Dependency" failure where lightweight models failed on complex textures (e.g., *Screw*), dropping to random guessing (~50% AUROC).
 
-```bash
-python perf_main.py <gpu_model>.
-```
+* **Solution:** Implemented a **GAN-style Learned Noise Generator** that dynamically learns optimal perturbations instead of using static Gaussian noise.
+* **Technique:** Used `tanh` activation constraints and stochastic latent vectors ($z$) to stabilize training.
+* **Outcome:** Successfully recovered detection capabilities on complex textures.
 
-Slurm script `run_slurm_perf.sh` is also provided to execute benchmark on slurm based system.
+### 3. Weakly-Supervised Learning (GAP + CAM)
+Addressed the high cost of industrial data annotation by enabling the model to train using **only image-level labels** (Good/Bad), removing the need for pixel-wise masks.
 
-Note that the results in paper are obtained with AMD Epyc 7272 CPU and NVIDIA Tesla V100S GPU and might therefore differ from the ones obtained on your system.
+* **Implementation:** Replaced the Segmentation Head with **Global Average Pooling (GAP)** and **Class Activation Mapping (CAM)**.
+* **Performance (KSDD2 Dataset):**
+    * **98.6% I-AUROC** (Detection Accuracy).
+    * This matches fully-supervised performance while requiring **zero** defect mask annotations.
 
-We also include the performance results from the paper inside `paper_results`.
+---
 
-## Citation
+## 📊 Experimental Results
 
-If you find our work useful, please cite our works:
+### Efficiency vs. Robustness Benchmark
+*Hardware: NVIDIA Tesla P100*
 
-```bibtex
-@InProceedings{rolih2024supersimplenet,
-  author={Rolih, Bla{\v{z}} and Fu{\v{c}}ka, Matic and Sko{\v{c}}aj, Danijel},
-  booktitle={International Conference on Pattern Recognition}, 
-  title={{S}uper{S}imple{N}et: {U}nifying {U}nsupervised and {S}upervised {L}earning for {F}ast and {R}eliable {S}urface {D}efect {D}etection},
-  year={2024}
-}
+| Configuration | Backbone | Inference Time | GPU Memory | Bottle I-AUROC | Screw I-AUROC |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Baseline** | WideResNet50 | 25.58 ms | 270.5 MB | **100%** | **91.2%** |
+| **Scenario A (Ours)** | **ResNet18** | **7.78 ms** | **52.4 MB** | **100%** | 51.1% (Fail) |
+| **Scenario B (Ours)** | ResNet18 + Non-Lin | 8.36 ms | 85.9 MB | N/A | 46.6% (Fail) |
 
-@article{rolih2025supersimplenet2,
-  author={Rolih, Bla{\v{z}} and Fu{\v{c}}ka, Matic and Sko{\v{c}}aj, Danijel},
-  journal={Journal of Intelligent Manufacturing}, 
-  title={No Label Left Behind: A Unified Surface Defect Detection Model for all Supervision Regimes},
-  year={2025}
-}
-```
+*(Note: While ResNet18 offers massive speed gains, it requires the Learned Noise Generator (Contribution #2) to handle complex textures like Screws effectively.)*
 
-## Acknowledgement
+### Weakly-Supervised Performance (No Masks)
+*Dataset: KSDD2 - Comparisons with state-of-the-art*.
 
-Thanks to [SimpleNet](https://github.com/DonaldRR/SimpleNet) for great inspiration.
+| Method | Supervision Regime | AP-det (Detection) | Annotation Cost |
+| :--- | :--- | :--- | :--- |
+| SimpleNet | Unsupervised | 88.4% | None |
+| SuperSimpleNet (Original) | Fully-Supervised | 97.4% | High (Pixel Masks) |
+| **Ours (GAP+CAM)** | **Weakly-Supervised** | **94.5%** | **Low (Image Labels)** |
+
+> **Insight:** Our Weakly-Supervised approach bridges the gap with fully supervised methods, achieving nearly identical detection performance (-2.9%) without the expensive labeling process.
+
+---
+
+## 🖼️ Visualizations
+
+*(Screenshots from the analysis report)*
+
+| **Trade-off Analysis** | **Weakly-Supervised Localization** |
+|:---:|:---:|
+| *Efficiency vs Robustness on Screw category* | *CAM Activation on KSDD2 Defect* |
+| ![Trade-off](docs/tradeoff_placeholder.png) | ![CAM](docs/cam_placeholder.png) |
+| *ResNet18 provides massive speedup but requires learned noise for complex textures.* | *Model correctly identifies defect location (yellow blob) using only image labels.* |
+
+*(Note: Please refer to Figures 6 and 19 in the [PDF Report](docs/Relazione_Progetto_ML_&_DL_ZAPPIA_GIUSEPPE%20.pdf) for high-resolution charts.)*
+
+---
+
+## 📜 Credits
+
+This project is based on the paper:
+*Rolih et al., "SuperSimpleNet: Unifying Unsupervised and Supervised Learning...", ICPR 2024.*
+
+Original Repository: [SuperSimpleNet](https://github.com/blaz-r/SuperSimpleNet)
+
+**Author:** Giuseppe Zappia
+**University:** Università della Calabria
